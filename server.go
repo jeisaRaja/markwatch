@@ -21,20 +21,26 @@ func NewServer() *Server {
 
 var ErrFileNotFound = fmt.Errorf("File not found")
 
+func (s *Server) Start() error {
+	http.HandleFunc("/", s.fileHandler)
+	return s.s.ListenAndServe()
+}
+
+func (s *Server) fileHandler(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/" {
+		http.NotFound(w, r)
+		return
+	}
+
+	http.ServeFile(w, r, s.fp)
+}
+
 func (s *Server) reload(fname string) error {
 	if _, err := os.Stat(fname); err != nil {
 		return ErrFileNotFound
 	}
 
 	s.fp = fname
-
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/" {
-			http.NotFound(w, r)
-			return
-		}
-		http.ServeFile(w, r, s.fp)
-	})
 
 	return nil
 }

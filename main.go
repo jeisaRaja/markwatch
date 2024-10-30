@@ -11,10 +11,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	// "os/exec"
-	// "runtime"
-	// "time"
-
+	"github.com/fsnotify/fsnotify"
 	"github.com/microcosm-cc/bluemonday"
 	"github.com/russross/blackfriday/v2"
 )
@@ -47,7 +44,10 @@ const (
 `
 )
 
-var server = NewServer()
+var (
+	tmpFile string
+	server  = NewServer()
+)
 
 type content struct {
 	Title string
@@ -66,9 +66,35 @@ func main() {
 		os.Exit(1)
 	}
 
+	go func() {
+		if err := server.Start(); err != nil && err != http.ErrServerClosed {
+			fmt.Println("Server error: ", err)
+		}
+	}()
+
 	if err := run(*filename, *tFname, os.Stdout, *skipPreview); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
+	}
+
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		os.Exit(1)
+	}
+	go watchFile(watcher, *filename, *tFname)
+
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, syscall.SIGTERM, syscall.SIGINT)
+	<-c
+
+	if err := server.s.Shutdown(nil); err != nil {
+		return
+	}
+	if err := watcher.Close(); err != nil {
+		fmt.Fprintln(os.Stderr, "Error closing watcher: ", err)
+	}
+	if tmpFile != "" {
+		removeTmpFile(tmpFile)
 	}
 }
 
@@ -83,12 +109,17 @@ func run(filename, tFname string, out io.Writer, skipPreview bool) error {
 		return err
 	}
 
+	if tmpFile != "" {
+		removeTmpFile(tmpFile)
+	}
+
 	tmp, err := os.CreateTemp("", "mdp*.html")
 	if err != nil {
 		return err
 	}
 	defer tmp.Close()
 	outName := tmp.Name()
+	tmpFile = outName
 	fmt.Fprintln(out, outName)
 
 	err = saveHTML(outName, htmlData)
@@ -141,19 +172,9 @@ func preview(fname string) error {
 		return err
 	}
 
-	go func() {
-		if err := server.s.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			fmt.Println("Server error: ", err)
-		}
-	}()
+	return nil
+}
 
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
-	<-c
-
-	if err := server.s.Shutdown(nil); err != nil {
-		return fmt.Errorf("server shutdown failed: %v", err)
-	}
-
-	return os.Remove(fname)
+func removeTmpFile(file string) error {
+	return os.Remove(file)
 }
