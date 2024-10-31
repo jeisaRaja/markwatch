@@ -24,6 +24,17 @@ const (
 <title>{{ .Title }}</title>
 </head>
 <body>
+<script>
+const socket = new WebSocket("ws://localhost:9090/ws")
+socket.onmessage = function(event){
+if(event.data === "refresh"){
+location.reload()
+}
+}
+socket.onclose = function(event){
+console.log("websocket closed:", event)
+  }
+</script>
 {{ .Body }}
 </body>
 </html>

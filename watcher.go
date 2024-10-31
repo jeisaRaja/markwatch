@@ -26,6 +26,7 @@ func watchFile(watcher *fsnotify.Watcher, path, tFname string) {
 					if err != nil {
 						log.Println("failed to re run")
 					}
+					triggerRefresh()
 				}
 			case err, ok := <-watcher.Errors:
 				if !ok {
