@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	_ "embed"
 	"flag"
 	"fmt"
 	"html/template"
@@ -16,44 +17,8 @@ import (
 	"github.com/russross/blackfriday/v2"
 )
 
-const (
-	defaultTemplate = `<!DOCTYPE html>
-<html>
-<head>
-<meta http-equiv="content-type" content="text/html; charset=utf-8">
-<title>{{ .Title }}</title>
-</head>
-<body>
-<script>
-const socket = new WebSocket("ws://localhost:9090/ws")
-socket.onmessage = function(event){
-if(event.data === "refresh"){
-location.reload()
-}
-}
-socket.onclose = function(event){
-console.log("websocket closed:", event)
-  }
-</script>
-{{ .Body }}
-</body>
-</html>
-`
-)
-const (
-	header = `<!DOCTYPE html>
-<html>
-<head>
-<meta http-equiv="content-type" content="text/html; charset=utf-8">
-<title>Markdown Preview Tool</title>
-</head>
-<body>
-`
-	footer = `
-</body>
-</html>
-`
-)
+//go:embed templates/default.html
+var defaultTemplate string
 
 var (
 	tmpFile string
@@ -94,6 +59,7 @@ func main() {
 	}
 	go watchFile(watcher, *filename, *tFname)
 
+	fmt.Println("Preview running in http://localhost:9090")
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, syscall.SIGTERM, syscall.SIGINT)
 	<-c
@@ -149,7 +115,7 @@ func parseContent(input []byte, tFname string) ([]byte, error) {
 	output := blackfriday.Run(input)
 	body := bluemonday.UGCPolicy().SanitizeBytes(output)
 
-	t, err := template.New("mdp").Parse(defaultTemplate)
+	t, err := template.New("gomdp").Parse(defaultTemplate)
 	if err != nil {
 		return nil, err
 	}
@@ -167,7 +133,7 @@ func parseContent(input []byte, tFname string) ([]byte, error) {
 	}
 
 	if err := t.Execute(&buf, c); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Error executing template: %w.", err)
 	}
 
 	return buf.Bytes(), nil

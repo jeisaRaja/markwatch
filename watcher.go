@@ -12,7 +12,6 @@ func watchFile(watcher *fsnotify.Watcher, path, tFname string) {
 	defer watcher.Close()
 
 	dir := filepath.Dir(path)
-	log.Println("watchFile called", dir)
 	go func() {
 		for {
 			select {
